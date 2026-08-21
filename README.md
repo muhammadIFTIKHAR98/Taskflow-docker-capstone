@@ -49,10 +49,25 @@ image never has access to another service's files. Git-tracked from commit 1.
   `--appendonly yes` to actually persist writes to disk, since it's an
   in-memory store by default.
 
-### ⏭ Phase 3 — Networking (next)
-Isolating traffic across `frontend-net` / `backend-net` / `monitoring-net`
-and proving that only the API container can reach both the proxy and the
-database — Nginx has no direct path to Postgres.
+### ✅ Phase 3 — Network segmentation
+- Created two isolated Docker networks: `frontend-net` and `backend-net`.
+- Placed Postgres and Redis on `backend-net` only; placed Nginx on
+  `frontend-net` only. Proved with a real failed connection (not just
+  config review) that Nginx has **no route at all** to Postgres — Docker's
+  embedded DNS can't even resolve the name across networks it isn't on,
+  which is a stronger guarantee than a firewall rule blocking traffic.
+- Connected the API container to both networks (`docker network connect`),
+  making it the single intentional bridge between the untrusted edge and
+  the data layer — verified end-to-end with a 4-way connectivity matrix:
+  API→Postgres ✅, API→Redis ✅, Nginx→API ✅, Nginx→Postgres ❌.
+- Learned that minimal images (from Phase 1's `slim` base) lack debug tools
+  like `ping` by design, and the professional fix is a disposable, fully
+  loaded debug container (`nicolaka/netshoot`) attached to the network under
+  test — not bloating the production image with tools it doesn't need.
+
+### ⏭ Phase 4 — Nginx reverse proxy (next)
+Replacing the plain Nginx test container with real reverse-proxy config
+routing traffic to the API over `frontend-net`, plus self-signed TLS.
 
 ## Tech stack
 Docker, Docker Compose, Python/Flask, gunicorn, PostgreSQL, Redis, Nginx,
