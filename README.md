@@ -65,9 +65,29 @@ image never has access to another service's files. Git-tracked from commit 1.
   loaded debug container (`nicolaka/netshoot`) attached to the network under
   test — not bloating the production image with tools it doesn't need.
 
-### ⏭ Phase 4 — Nginx reverse proxy (next)
-Replacing the plain Nginx test container with real reverse-proxy config
-routing traffic to the API over `frontend-net`, plus self-signed TLS.
+### ✅ Phase 4 — Nginx reverse proxy
+- Replaced Nginx's default config with a real `upstream` + `proxy_pass` setup
+  routing traffic to the API container by container name over `frontend-net`.
+- Forwarded original client headers (`Host`, `X-Real-IP`,
+  `X-Forwarded-For/Proto`) so the API never loses the real caller's identity
+  behind the proxy hop.
+- Confirmed the API has zero direct host port exposure — Nginx is the sole
+  entry point into the whole stack.
+
+### ✅ Phase 5 — Centralized logging: Fluent Bit → OpenSearch
+- Ran OpenSearch single-node, handling the 2.12+ mandatory admin-password
+  requirement and self-signed TLS rather than an outdated "disable security"
+  approach.
+- Built a Fluent Bit config that tails Docker's JSON log files directly via a
+  bind mount (`/var/lib/docker/containers`, read-only), parses Docker's log
+  wrapper format, and ships structured documents to OpenSearch.
+- Verified end-to-end across all three layers — source logs, Fluent Bit's own
+  processing logs, and real queryable documents landing in OpenSearch (not
+  just "the container didn't crash").
+
+### ⏭ Phase 6 — Metrics: cAdvisor + Prometheus + Grafana (next)
+Per-container CPU/memory/network metrics scraped by Prometheus, visualized in
+Grafana dashboards — the metrics counterpart to Phase 5's logging pipeline.
 
 ## Tech stack
 Docker, Docker Compose, Python/Flask, gunicorn, PostgreSQL, Redis, Nginx,
