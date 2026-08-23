@@ -85,9 +85,20 @@ image never has access to another service's files. Git-tracked from commit 1.
   processing logs, and real queryable documents landing in OpenSearch (not
   just "the container didn't crash").
 
-### ⏭ Phase 6 — Metrics: cAdvisor + Prometheus + Grafana (next)
-Per-container CPU/memory/network metrics scraped by Prometheus, visualized in
-Grafana dashboards — the metrics counterpart to Phase 5's logging pipeline.
+### ✅ Phase 6 — Metrics: cAdvisor + Prometheus + Grafana
+- cAdvisor exposing real per-container resource metrics at the kernel level.
+- Prometheus scraping and storing that data over time via a `cadvisor` scrape
+  job.
+- Grafana dashboard ("TaskFlow Overview") with a live CPU-usage panel for
+  the API container, using `rate(container_cpu_usage_seconds_total{...}[1m])`
+  to convert the raw cumulative counter into a meaningful per-second trend.
+- Verified the whole chain — cAdvisor → Prometheus target health → Grafana
+  data source test → live graph reacting to real traffic.
+
+### ⏭ Phase 7 — Full orchestration with Docker Compose (next)
+Collapsing every service built so far into one `docker-compose.yml`, with
+`.env` for config, Docker secrets for credentials, and Compose profiles for
+dev vs. prod.
 
 ## Tech stack
 Docker, Docker Compose, Python/Flask, gunicorn, PostgreSQL, Redis, Nginx,
