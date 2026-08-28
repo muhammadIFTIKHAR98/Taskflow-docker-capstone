@@ -1,0 +1,122 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskflow-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: taskflow-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend-net
+
+  api:
+    build: ./api
+    container_name: taskflow-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - backend-net
+      - frontend-net
+      - monitoring-net
+
+  nginx:
+    build: ./nginx
+    container_name: taskflow-nginx
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    networks:
+      - frontend-net
+
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: taskflow-opensearch
+    profiles: ["observability"]
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_PASSWORD}
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    networks:
+      - monitoring-net
+
+  fluent-bit:
+    build: ./fluent-bit
+    container_name: taskflow-fluentbit
+    profiles: ["observability"]
+    depends_on:
+      - opensearch
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - monitoring-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: taskflow-cadvisor
+    profiles: ["observability"]
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8081:8080"
+    networks:
+      - monitoring-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: taskflow-prometheus
+    profiles: ["observability"]
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: taskflow-grafana
+    profiles: ["observability"]
+    ports:
+      - "3000:3000"
+    networks:
+      - monitoring-net
+
+networks:
+  frontend-net:
+    external: true
+  backend-net:
+    external: true
+  monitoring-net:
+    external: true
+
+volumes:
+  pg-data:
+    external: true
+  redis-data:
+    external: true
