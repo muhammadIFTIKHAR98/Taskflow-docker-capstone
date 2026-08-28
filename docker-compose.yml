@@ -1,9 +1,9 @@
-version: "3.9"
 
 services:
   postgres:
     image: postgres:16-alpine
     container_name: taskflow-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -15,19 +15,31 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   redis:
     image: redis:7-alpine
     container_name: taskflow-redis
+    restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
     networks:
       - backend-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   api:
     build: ./api
     container_name: taskflow-api
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,16 +49,34 @@ services:
       - backend-net
       - frontend-net
       - monitoring-net
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   nginx:
     build: ./nginx
     container_name: taskflow-nginx
+    restart: unless-stopped
     depends_on:
       - api
     ports:
       - "8080:80"
     networks:
       - frontend-net
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   opensearch:
     image: opensearchproject/opensearch:latest

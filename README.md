@@ -95,10 +95,30 @@ image never has access to another service's files. Git-tracked from commit 1.
 - Verified the whole chain — cAdvisor → Prometheus target health → Grafana
   data source test → live graph reacting to real traffic.
 
-### ⏭ Phase 7 — Full orchestration with Docker Compose (next)
-Collapsing every service built so far into one `docker-compose.yml`, with
-`.env` for config, Docker secrets for credentials, and Compose profiles for
-dev vs. prod.
+### ✅ Phase 7 — Full orchestration with Docker Compose
+Collapsed every manually-run service into one `docker-compose.yml`, reusing
+existing networks/volumes via `external: true`, healthcheck-gated
+`depends_on` to fix a real Postgres race condition, and Compose **profiles**
+to cleanly separate the always-on core from an opt-in `observability` stack.
+Diagnosed and fixed a real hostname-resolution break after the Compose move,
+and worked around (then properly fixed via upgrade) a genuine compatibility
+bug in the legacy `docker-compose` v1 binary.
+
+### ✅ Phase 8 — Production hardening
+- **`restart: unless-stopped`** on all core services — verified it correctly
+  recovers from a genuine crash (`kill -9` on the container's main process)
+  while still respecting an intentional stop/kill, a distinction confirmed
+  through direct testing, not just assumed.
+- **Resource limits** (`deploy.resources.limits`) — CPU/memory ceilings sized
+  per service, confirmed actually attached to the running container via
+  `docker inspect`, not just declared in YAML.
+- **Read-only root filesystem** on `api` and `nginx`, with scoped `tmpfs`
+  mounts only where each process genuinely needs to write (`/tmp` for the
+  API, `/var/cache/nginx` + `/var/run` for Nginx) — verified a write to the
+  root filesystem is blocked while the allowed paths still work.
+
+### ⏭ Optional — Kafka messaging (planned)
+### ⏭ Stretch — Docker Swarm stack deploy (planned)
 
 ## Tech stack
 Docker, Docker Compose, Python/Flask, gunicorn, PostgreSQL, Redis, Nginx,
